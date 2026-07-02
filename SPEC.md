@@ -31,44 +31,42 @@ flowchart LR
 
 ## 2. Package Layout
 
-The package SHOULD start with a single public library target named `ANS`.
-Subdomains are represented by folders and protocols, not by prefix-heavy module
-names.
+The package exposes the full `ANS` target and a constrained `ANSEmbedded`
+target. Subdomains are represented by folders and protocols, not by prefix-heavy
+module names.
 
 ```text
 Package.swift
 Sources/
   ANS/
-    Name.swift
-    Version.swift
-    Host.swift
-    Agent.swift
-    Registration.swift
-    Endpoint.swift
-    Certificate.swift
-    Fingerprint.swift
+    Cache/
+    Core/
+    Discovery/
+    Network/
+    Registry/
+    Transparency/
+    Verification/
+  ANSEmbedded/
     Badge.swift
-    Proof.swift
-    Receipt.swift
-    Token.swift
-    Policy.swift
+    BadgeProviding.swift
+    Endpoint.swift
+    Fingerprint.swift
+    Host.swift
+    Name.swift
     Outcome.swift
-    Client.swift
-    Registry.swift
-    TransparencyLog.swift
+    ParsingError.swift
+    VerificationError.swift
     Verifier.swift
-    Transport.swift
-    Resolver.swift
-    Crypto.swift
-    Paths.swift
-    Error.swift
+    Version.swift
 Tests/
   ANSTests/
-    NameTests.swift
-    VersionTests.swift
-    HostTests.swift
-    RegistrationTests.swift
-    VerifierTests.swift
+    Core/
+    Network/
+    Support/
+    Transparency/
+    Verification/
+  ANSEmbeddedTests/
+    EmbeddedTests.swift
 ```
 
 File naming rules:
@@ -100,29 +98,32 @@ let package = Package(
     ],
     products: [
         .library(name: "ANS", targets: ["ANS"]),
+        .library(name: "ANSEmbedded", targets: ["ANSEmbedded"]),
     ],
     targets: [
         .target(name: "ANS"),
+        .target(name: "ANSEmbedded"),
         .testTarget(name: "ANSTests", dependencies: ["ANS"]),
+        .testTarget(name: "ANSEmbeddedTests", dependencies: ["ANSEmbedded"]),
     ]
 )
 ```
 
-Core value types SHOULD avoid Apple-only APIs when practical so the package can
-later support Linux and WebAssembly. Platform-specific adapters MUST be isolated
-with conditional compilation.
+Core value types SHOULD avoid Apple-only APIs when practical. The full `ANS`
+target may use Foundation, URLSession, JSONEncoder, and CryptoKit. The
+`ANSEmbedded` target MUST remain Foundation-free.
 
 ## 4. Public Usage Shape
 
-The official public usage shape is Swift module selector syntax.
+The official public usage shape is unqualified names after importing the module.
 
 ```swift
 import ANS
 
-let name = try ANS::Name(rawValue: "ans://v1.0.0.agent.example.com")
-let host = try ANS::Host(rawValue: "agent.example.com")
-let client = ANS::Client(configuration: configuration, transport: transport)
-let verifier = ANS::Verifier(
+let name = try Name(rawValue: "ans://v1.0.0.agent.example.com")
+let host = try Host(rawValue: "agent.example.com")
+let client = Client(configuration: configuration, transport: transport)
+let verifier = Verifier(
     resolver: resolver,
     log: log,
     inspector: inspector,
@@ -130,9 +131,15 @@ let verifier = ANS::Verifier(
 )
 ```
 
+Swift module selector syntax is reserved for collision cases.
+
+```swift
+let ansName = try ANS::Name(rawValue: rawValue)
+```
+
 Naming requirements:
 
-| Concept | Public symbol | Qualified use |
+| Concept | Public symbol | Collision-qualified use |
 | --- | --- | --- |
 | Versioned ANS identifier | `Name` | `ANS::Name` |
 | Numeric version | `Version` | `ANS::Version` |
@@ -144,6 +151,33 @@ Naming requirements:
 
 The SDK MUST NOT expose redundant public names such as `ANSName`, `ANSClient`,
 or `ANSVerifier`.
+
+## 4.1 Embedded Usage Shape
+
+Robots and constrained runtimes use the `ANSEmbedded` target when Foundation,
+URLSession, JSON, or CryptoKit are unavailable or undesirable.
+
+```swift
+import ANSEmbedded
+
+let host = try Host(rawValue: "robot.example.com")
+let fingerprint = try Fingerprint(rawValue: "SHA256:<hex>")
+let verifier = Verifier(provider: badgeProvider)
+let outcome = try verifier.verifyServer(host: host, fingerprint: fingerprint)
+```
+
+Embedded responsibilities:
+
+| Layer | Requirement |
+| --- | --- |
+| Name parsing | `Name`, `Version`, and `Host` are available without Foundation |
+| Badge verification | compare host, badge status, and supplied fingerprint |
+| Transport | provided by host firmware or application code |
+| Cryptography | provided by host firmware or application code |
+| JSON / CBOR | provided outside the embedded core |
+
+The embedded target MUST prefer generic static dispatch over existential-heavy
+runtime composition.
 
 ## 5. Architectural Shape
 
@@ -807,7 +841,7 @@ Identity certificates are never BYOC.
 
 ## 23. Caching
 
-`Caching` is a protocol. Concrete caches are actors when mutable.
+`Caching` is a protocol. Concrete caches choose isolation by workload.
 
 ```swift
 public protocol Caching: Sendable {
@@ -815,6 +849,16 @@ public protocol Caching: Sendable {
     func store(_ value: CacheValue, for key: CacheKey, expiresAt: Date?) async throws
 }
 ```
+
+Isolation requirements:
+
+| Workload | Implementation |
+| --- | --- |
+| memory-only short critical section | `Mutex` |
+| I/O or suspension while isolated | `actor` |
+
+`MemoryCache` uses `Mutex` because it only protects an in-memory dictionary and
+does not perform I/O while isolated.
 
 Cacheable values:
 

@@ -13,9 +13,12 @@ let package = Package(
     ],
     products: [
         .library(name: "ANS", targets: ["ANS"]),
+        .library(name: "ANSEmbedded", targets: ["ANSEmbedded"]),
     ],
     targets: [
         .target(name: "ANS"),
+        .target(name: "ANSEmbedded"),
         .testTarget(name: "ANSTests", dependencies: ["ANS"]),
+        .testTarget(name: "ANSEmbeddedTests", dependencies: ["ANSEmbedded"]),
     ]
 )

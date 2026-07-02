@@ -15,8 +15,8 @@ concurrency-safe, and explicit about trust decisions.
 flowchart LR
   Evidence["Evidence"] --> Protocols["Capabilities"]
   Protocols --> Values["Value Types"]
-  Values --> Actors["Actor-Isolated Effects"]
-  Actors --> Decision["Trust Decision"]
+  Values --> Effects["Isolated Effects"]
+  Effects --> Decision["Trust Decision"]
 ```
 
 ## Principles
@@ -26,15 +26,18 @@ flowchart LR
 The package product should be `ANS`. Public types should avoid redundant `ANS`
 prefixes because users already access them through the module namespace.
 The SDK should not define a wrapper namespace type such as `enum ANS`; the Swift
-module itself is the namespace. Public documentation should use Swift module
-selector syntax.
+module itself is the namespace. Public documentation should use unqualified
+symbols after `import ANS`. Swift module selector syntax is for name collisions.
 
 | Prefer | Avoid |
 | --- | --- |
-| `ANS::Name` | `ANSName` |
-| `ANS::Version` | `ANSVersion` |
-| `ANS::Client` | `ANSClient` |
-| `ANS::Verifier` | `ANSVerifier` |
+| `Name` | `ANSName` |
+| `Version` | `ANSVersion` |
+| `Client` | `ANSClient` |
+| `Verifier` | `ANSVerifier` |
+
+When a local or imported symbol collides, use the module selector explicitly:
+`ANS::Name`.
 
 ### Protocols define capabilities
 
@@ -49,8 +52,17 @@ names, versions, hosts, fingerprints, policies, badges, proofs, and outcomes.
 ### Effects are isolated
 
 Networking, DNS, cache mutation, certificate loading, and transparency-log
-verification are effects. They should be isolated behind async protocols and
-actors where ordering or shared mutable state matters.
+verification are effects. They should be isolated behind protocols. Use actors
+for I/O and suspension boundaries; use `Mutex` for short memory-only critical
+sections.
+
+### Embedded runtimes are first-class
+
+Robots and constrained devices may not have Foundation, URLSession, JSON, or
+CryptoKit. The SDK should keep a Foundation-free embedded surface for validated
+names, hosts, fingerprints, badges, and static verification. Rich adapters
+belong in the full `ANS` target; deterministic runtime verification belongs in
+`ANSEmbedded`.
 
 ### Verification is a first-class workflow
 

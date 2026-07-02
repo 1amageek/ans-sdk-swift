@@ -4,12 +4,12 @@ import ANS
 
 @Test(.timeLimit(.minutes(1)))
 func serverVerificationUsesBadgeAndFingerprint() async throws {
-    let host = try ANS::Host(rawValue: "agent.example.com")
-    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
-    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
+    let host = try Host(rawValue: "agent.example.com")
+    let certificate = Certificate(der: Data([1, 2, 3]))
+    let fingerprint = Fingerprint.sha256(der: certificate.der)
+    let badge = Badge(host: host, status: .active, serverFingerprints: [fingerprint])
     let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+    let verifier = Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
     let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
 
@@ -18,12 +18,12 @@ func serverVerificationUsesBadgeAndFingerprint() async throws {
 
 @Test(.timeLimit(.minutes(1)))
 func serverVerificationRejectsFingerprintMismatch() async throws {
-    let host = try ANS::Host(rawValue: "agent.example.com")
-    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-    let other = ANS::Fingerprint.sha256(der: Data([9, 9, 9]))
-    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [other])
+    let host = try Host(rawValue: "agent.example.com")
+    let certificate = Certificate(der: Data([1, 2, 3]))
+    let other = Fingerprint.sha256(der: Data([9, 9, 9]))
+    let badge = Badge(host: host, status: .active, serverFingerprints: [other])
     let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+    let verifier = Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
     let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
 
@@ -36,19 +36,19 @@ func serverVerificationRejectsFingerprintMismatch() async throws {
 
 @Test(.timeLimit(.minutes(1)))
 func daneRequiredPolicyUsesTLSA() async throws {
-    let host = try ANS::Host(rawValue: "agent.example.com")
-    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
-    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
+    let host = try Host(rawValue: "agent.example.com")
+    let certificate = Certificate(der: Data([1, 2, 3]))
+    let fingerprint = Fingerprint.sha256(der: certificate.der)
+    let badge = Badge(host: host, status: .active, serverFingerprints: [fingerprint])
     let resolver = StaticResolver(
         txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]],
         tlsaRecords: [
             "_443._tcp.agent.example.com": [
-                ANS::TLSA(usage: 3, selector: 0, matchingType: 1, certificateAssociationData: fingerprint.digest, dnssecSecure: true)
+                TLSA(usage: 3, selector: 0, matchingType: 1, certificateAssociationData: fingerprint.digest, dnssecSecure: true)
             ],
         ]
     )
-    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+    let verifier = Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
     let outcome = try await verifier.verifyServer(host: host, chain: [certificate], policy: .daneRequired)
 
@@ -57,17 +57,17 @@ func daneRequiredPolicyUsesTLSA() async throws {
 
 @Test(.timeLimit(.minutes(1)))
 func scittRequiredFailsClosedWithDefaultVerifier() async throws {
-    let host = try ANS::Host(rawValue: "agent.example.com")
-    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
-    let badge = ANS::Badge(
+    let host = try Host(rawValue: "agent.example.com")
+    let certificate = Certificate(der: Data([1, 2, 3]))
+    let fingerprint = Fingerprint.sha256(der: certificate.der)
+    let badge = Badge(
         host: host,
         status: .active,
         serverFingerprints: [fingerprint],
-        receipt: ANS::Receipt(bytes: Data([1]))
+        receipt: Receipt(bytes: Data([1]))
     )
     let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+    let verifier = Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
     let outcome = try await verifier.verifyServer(host: host, chain: [certificate], policy: .scittRequired)
 
@@ -80,12 +80,12 @@ func scittRequiredFailsClosedWithDefaultVerifier() async throws {
 
 @Test(.timeLimit(.minutes(1)))
 func defaultInspectorFailsClientIdentityExtractionWithoutParsedSANs() async throws {
-    let host = try ANS::Host(rawValue: "agent.example.com")
-    let badge = ANS::Badge(host: host, status: .active)
+    let host = try Host(rawValue: "agent.example.com")
+    let badge = Badge(host: host, status: .active)
     let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+    let verifier = Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
-    await #expect(throws: ANS::CertificateError.self) {
-        try await verifier.verifyClient(chain: [ANS::Certificate(der: Data([1, 2, 3]))])
+    await #expect(throws: CertificateError.self) {
+        try await verifier.verifyClient(chain: [Certificate(der: Data([1, 2, 3]))])
     }
 }
