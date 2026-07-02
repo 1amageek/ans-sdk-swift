@@ -30,4 +30,24 @@ final class SCITTTests: XCTestCase {
 
         XCTAssertTrue(verification.verified)
     }
+
+    func testStatusTokenVerificationChecksSignature() throws {
+        let privateKey = P256.Signing.PrivateKey()
+        let signedBytes = Data("status".utf8)
+        let signature = try privateKey.signature(for: signedBytes).rawRepresentation
+        let rootKey = ANS::RootKey(
+            origin: "test",
+            keyID: Data([0, 0, 0, 1]),
+            spkiDER: privateKey.publicKey.derRepresentation,
+            rawLine: ""
+        )
+        let evidence = ANS::SCITT.TokenEvidence(
+            token: ANS::Token(bytes: Data([1])),
+            rootKey: rootKey,
+            signedBytes: signedBytes,
+            signature: signature
+        )
+
+        XCTAssertTrue(try ANS::SCITT.verifyStatusToken(evidence))
+    }
 }

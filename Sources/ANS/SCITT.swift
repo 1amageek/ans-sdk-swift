@@ -52,6 +52,20 @@ public enum SCITT {
         }
     }
 
+    public struct TokenEvidence: Sendable, Hashable {
+        public let token: Token
+        public let rootKey: RootKey
+        public let signedBytes: Data
+        public let signature: Data
+
+        public init(token: Token, rootKey: RootKey, signedBytes: Data, signature: Data) {
+            self.token = token
+            self.rootKey = rootKey
+            self.signedBytes = signedBytes
+            self.signature = signature
+        }
+    }
+
     public static func verify(_ evidence: Evidence) throws -> Verification {
         guard !evidence.receipt.bytes.isEmpty else {
             throw CryptoError("SCITT receipt bytes are empty")
@@ -74,5 +88,24 @@ public enum SCITT {
         }
 
         return Verification(merkleVerified: true, signatureVerified: true)
+    }
+
+    public static func verifyStatusToken(_ evidence: TokenEvidence) throws -> Bool {
+        guard !evidence.token.bytes.isEmpty else {
+            throw CryptoError("SCITT status token bytes are empty")
+        }
+
+        let publicKey = try P256.Signing.PublicKey(derRepresentation: evidence.rootKey.spkiDER)
+        let signature: P256.Signing.ECDSASignature
+        if evidence.signature.count == 64 {
+            signature = try P256.Signing.ECDSASignature(rawRepresentation: evidence.signature)
+        } else {
+            signature = try P256.Signing.ECDSASignature(derRepresentation: evidence.signature)
+        }
+
+        guard publicKey.isValidSignature(signature, for: evidence.signedBytes) else {
+            throw CryptoError("SCITT status token signature does not verify")
+        }
+        return true
     }
 }
