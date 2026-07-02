@@ -1,18 +1,6 @@
 import CryptoKit
 import Foundation
 
-public protocol SCITTVerifying: Sendable {
-    func verify(badge: Badge) async throws -> Bool
-}
-
-public struct BadgeSCITTVerifier: SCITTVerifying {
-    public init() {}
-
-    public func verify(badge: Badge) async throws -> Bool {
-        false
-    }
-}
-
 public enum SCITT {
     public struct Evidence: Sendable, Hashable {
         public let receipt: Receipt

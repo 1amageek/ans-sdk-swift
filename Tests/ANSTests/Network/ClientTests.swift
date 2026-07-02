@@ -75,27 +75,3 @@ func rootKeysParseTextResponse() async throws {
     #expect(keys[0].keyID == Data([0xaa, 0xbb, 0xcc, 0xdd]))
     #expect(keys[0].spkiDER == Data(repeating: 0x01, count: 10))
 }
-
-private actor FakeTransport: ANS::Transport {
-    private let response: ANS::Response
-    private var lastRequest: ANS::Request?
-
-    init(response: ANS::Response) {
-        self.response = response
-    }
-
-    func send(_ request: ANS::Request) async throws -> ANS::Response {
-        lastRequest = request
-        return response
-    }
-
-    func recordedRequest() -> ANS::Request? {
-        lastRequest
-    }
-}
-
-private extension Data {
-    var ansTestHexString: String {
-        map { String(format: "%02x", $0) }.joined()
-    }
-}

@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import ANS
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func nameParsesWithModuleSelector() throws {
     let name = try ANS::Name(rawValue: "ans://v1.2.3.agent.example.com")
 
@@ -12,7 +12,7 @@ func nameParsesWithModuleSelector() throws {
     #expect(name.rawValue == "ans://v1.2.3.agent.example.com")
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func versionRejectsPrereleaseAndBuildMetadata() {
     #expect(throws: (any Error).self) {
         try ANS::Version("1.0.0-beta")
@@ -22,7 +22,7 @@ func versionRejectsPrereleaseAndBuildMetadata() {
     }
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func hostRejectsIPAndSingleLabel() {
     #expect(throws: (any Error).self) {
         try ANS::Host(rawValue: "127.0.0.1")
@@ -32,14 +32,14 @@ func hostRejectsIPAndSingleLabel() {
     }
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func wireAliasesCanonicalize() {
     #expect(ANS::Endpoint.ProtocolKind("HTTP_API").rawValue == "HTTP-API")
     #expect(ANS::Endpoint.TransportKind("STREAMABLE_HTTP").rawValue == "STREAMABLE-HTTP")
     #expect(ANS::Endpoint.TransportKind("JSON_RPC").rawValue == "JSON-RPC")
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func registrationValidatesVersionCSRPairing() throws {
     let host = try ANS::Host(rawValue: "agent.example.com")
     let endpoint = ANS::Endpoint(url: URL(string: "https://agent.example.com/mcp")!, protocolKind: .mcp)
@@ -62,7 +62,7 @@ func registrationValidatesVersionCSRPairing() throws {
     )
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func fingerprintSHA256() {
     let data = Data([0x01, 0x02, 0x03])
     let fingerprint = ANS::Fingerprint.sha256(der: data)
@@ -70,7 +70,7 @@ func fingerprintSHA256() {
     #expect(fingerprint.rawValue == "SHA256:\(expected)")
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func registrationRequestEncodesANSWireKeys() throws {
     let host = try ANS::Host(rawValue: "agent.example.com")
     let endpoint = ANS::Endpoint(url: URL(string: "https://agent.example.com/mcp")!, protocolKind: .mcp)
@@ -96,7 +96,7 @@ func registrationRequestEncodesANSWireKeys() throws {
     #expect(object["host"] == nil)
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func agentDecodesANSWireKeys() throws {
     let json = """
     {
@@ -129,10 +129,4 @@ func agentDecodesANSWireKeys() throws {
     #expect(agent.status == .active)
     #expect(agent.endpoints.first?.url.absoluteString == "https://agent.example.com/mcp")
     #expect(agent.endpoints.first?.protocolKind == .mcp)
-}
-
-private extension Data {
-    var ansTestHexString: String {
-        map { String(format: "%02x", $0) }.joined()
-    }
 }

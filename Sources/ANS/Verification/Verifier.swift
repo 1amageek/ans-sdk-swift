@@ -1,6 +1,6 @@
 import Foundation
 
-public actor Verifier {
+public struct Verifier: Verifying, Sendable {
     private let resolver: any Resolving
     private let log: any TransparencyLog
     private let inspector: any CertificateInspecting

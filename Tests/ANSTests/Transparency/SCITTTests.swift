@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import ANS
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func scittVerificationChecksMerkleProofAndSignature() throws {
     let payload = Data("payload".utf8)
     let leaf = ANS::Proof.leafHash(payload: payload)
@@ -31,7 +31,7 @@ func scittVerificationChecksMerkleProofAndSignature() throws {
     #expect(verification.verified)
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func statusTokenVerificationChecksSignature() throws {
     let privateKey = P256.Signing.PrivateKey()
     let signedBytes = Data("status".utf8)
@@ -52,7 +52,7 @@ func statusTokenVerificationChecksSignature() throws {
     #expect(try ANS::SCITT.verifyStatusToken(evidence))
 }
 
-@Test
+@Test(.timeLimit(.minutes(1)))
 func proofUsesRFC6962InternalNodePrefix() {
     let left = ANS::Proof.leafHash(payload: Data("left".utf8))
     let right = ANS::Proof.leafHash(payload: Data("right".utf8))

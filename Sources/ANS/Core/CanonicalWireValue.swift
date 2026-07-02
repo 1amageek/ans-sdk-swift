@@ -1,16 +1,11 @@
 import Foundation
 
-public struct WireValue: Sendable, Hashable, Codable, ExpressibleByStringLiteral, CustomStringConvertible {
-    public let rawValue: String
+public protocol CanonicalWireValue: Sendable, Hashable, Codable, CustomStringConvertible {
+    var rawValue: String { get }
+    init(_ rawValue: String)
+}
 
-    public init(_ rawValue: String) {
-        self.rawValue = rawValue
-    }
-
-    public init(stringLiteral value: String) {
-        self.init(value)
-    }
-
+extension CanonicalWireValue {
     public var description: String { rawValue }
 
     public init(from decoder: Decoder) throws {
