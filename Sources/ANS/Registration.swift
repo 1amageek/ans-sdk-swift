@@ -97,6 +97,18 @@ public enum Registration {
                 }
             }
         }
+
+        private enum CodingKeys: String, CodingKey {
+            case displayName = "agentDisplayName"
+            case host = "agentHost"
+            case endpoints
+            case version
+            case identityCSR = "identityCsrPEM"
+            case serverCSR = "serverCsrPEM"
+            case serverCertificate = "serverCertificatePEM"
+            case description = "agentDescription"
+            case discoveryProfiles
+        }
     }
 
     public struct Challenge: Sendable, Hashable, Codable {
@@ -147,6 +159,26 @@ public enum Registration {
             self.challenges = challenges
             self.dnsRecords = dnsRecords
             self.nextSteps = nextSteps
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: AnyCodingKey.self)
+            self.agentID = try container.decodeFirstIfPresent(Agent.ID.self, for: ["agentId", "agentID"])
+            self.name = try container.decodeFirstIfPresent(Name.self, for: ["ansName", "name"])
+            self.status = try container.decodeFirst(Status.self, for: ["status", "agentStatus"])
+            self.challenges = try container.decodeFirstIfPresent([Challenge].self, for: ["challenges"]) ?? []
+            self.dnsRecords = try container.decodeFirstIfPresent([DNSRecord].self, for: ["dnsRecords"]) ?? []
+            self.nextSteps = try container.decodeFirstIfPresent([Step].self, for: ["nextSteps"]) ?? []
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: AnyCodingKey.self)
+            try container.encodeIfPresent(agentID, forKey: AnyCodingKey(stringValue: "agentId"))
+            try container.encodeIfPresent(name, forKey: AnyCodingKey(stringValue: "ansName"))
+            try container.encode(status, forKey: AnyCodingKey(stringValue: "status"))
+            try container.encode(challenges, forKey: AnyCodingKey(stringValue: "challenges"))
+            try container.encode(dnsRecords, forKey: AnyCodingKey(stringValue: "dnsRecords"))
+            try container.encode(nextSteps, forKey: AnyCodingKey(stringValue: "nextSteps"))
         }
     }
 }

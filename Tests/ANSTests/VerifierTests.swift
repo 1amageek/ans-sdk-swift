@@ -1,55 +1,92 @@
 import Foundation
-import XCTest
+import Testing
 import ANS
 
-final class VerifierTests: XCTestCase {
-    func testServerVerificationUsesBadgeAndFingerprint() async throws {
-        let host = try ANS::Host(rawValue: "agent.example.com")
-        let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-        let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
-        let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
-        let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-        let log = StaticLog(badge: badge)
-        let verifier = ANS::Verifier(resolver: resolver, log: log)
+@Test(.timeLimit(.minutes(1)))
+func serverVerificationUsesBadgeAndFingerprint() async throws {
+    let host = try ANS::Host(rawValue: "agent.example.com")
+    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
+    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
+    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
+    let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
+    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
-        let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
+    let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
 
-        XCTAssertTrue(outcome.isVerified)
+    #expect(outcome.isVerified)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func serverVerificationRejectsFingerprintMismatch() async throws {
+    let host = try ANS::Host(rawValue: "agent.example.com")
+    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
+    let other = ANS::Fingerprint.sha256(der: Data([9, 9, 9]))
+    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [other])
+    let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
+    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+
+    let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
+
+    if case .rejected = outcome {
+        #expect(true)
+    } else {
+        Issue.record("Expected rejected outcome")
     }
+}
 
-    func testServerVerificationRejectsFingerprintMismatch() async throws {
-        let host = try ANS::Host(rawValue: "agent.example.com")
-        let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-        let other = ANS::Fingerprint.sha256(der: Data([9, 9, 9]))
-        let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [other])
-        let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
-        let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+@Test(.timeLimit(.minutes(1)))
+func daneRequiredPolicyUsesTLSA() async throws {
+    let host = try ANS::Host(rawValue: "agent.example.com")
+    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
+    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
+    let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
+    let resolver = StaticResolver(
+        txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]],
+        tlsaRecords: [
+            "_443._tcp.agent.example.com": [
+                ANS::TLSA(usage: 3, selector: 0, matchingType: 1, certificateAssociationData: fingerprint.digest, dnssecSecure: true)
+            ],
+        ]
+    )
+    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
-        let outcome = try await verifier.verifyServer(host: host, chain: [certificate])
+    let outcome = try await verifier.verifyServer(host: host, chain: [certificate], policy: .daneRequired)
 
-        guard case .rejected = outcome else {
-            return XCTFail("Expected rejection")
-        }
+    #expect(outcome.isVerified)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func scittRequiredFailsClosedWithDefaultVerifier() async throws {
+    let host = try ANS::Host(rawValue: "agent.example.com")
+    let certificate = ANS::Certificate(der: Data([1, 2, 3]))
+    let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
+    let badge = ANS::Badge(
+        host: host,
+        status: .active,
+        serverFingerprints: [fingerprint],
+        receipt: ANS::Receipt(bytes: Data([1]))
+    )
+    let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
+    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+
+    let outcome = try await verifier.verifyServer(host: host, chain: [certificate], policy: .scittRequired)
+
+    if case .rejected = outcome {
+        #expect(true)
+    } else {
+        Issue.record("Expected SCITT required policy to reject without verified SCITT evidence")
     }
+}
 
-    func testDANERequiredPolicyUsesTLSA() async throws {
-        let host = try ANS::Host(rawValue: "agent.example.com")
-        let certificate = ANS::Certificate(der: Data([1, 2, 3]))
-        let fingerprint = ANS::Fingerprint.sha256(der: certificate.der)
-        let badge = ANS::Badge(host: host, status: .active, serverFingerprints: [fingerprint])
-        let resolver = StaticResolver(
-            txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]],
-            tlsaRecords: [
-                "_443._tcp.agent.example.com": [
-                    ANS::TLSA(usage: 3, selector: 0, matchingType: 1, certificateAssociationData: fingerprint.digest, dnssecSecure: true)
-                ],
-            ]
-        )
-        let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
+@Test(.timeLimit(.minutes(1)))
+func defaultInspectorFailsClientIdentityExtractionWithoutParsedSANs() async throws {
+    let host = try ANS::Host(rawValue: "agent.example.com")
+    let badge = ANS::Badge(host: host, status: .active)
+    let resolver = StaticResolver(txtRecords: ["_ans-badge.agent.example.com": ["https://tl.example.com/v1/agents/agent-1"]])
+    let verifier = ANS::Verifier(resolver: resolver, log: StaticLog(badge: badge))
 
-        let outcome = try await verifier.verifyServer(host: host, chain: [certificate], policy: .daneRequired)
-
-        XCTAssertTrue(outcome.isVerified)
+    await #expect(throws: ANS::CertificateError.self) {
+        try await verifier.verifyClient(chain: [ANS::Certificate(der: Data([1, 2, 3]))])
     }
 }
 

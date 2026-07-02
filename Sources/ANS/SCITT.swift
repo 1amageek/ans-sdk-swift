@@ -9,13 +9,7 @@ public struct BadgeSCITTVerifier: SCITTVerifying {
     public init() {}
 
     public func verify(badge: Badge) async throws -> Bool {
-        guard badge.receipt != nil || badge.statusToken != nil else {
-            return false
-        }
-        if let proof = badge.proof {
-            return proof.verifiesLeafHash()
-        }
-        return true
+        false
     }
 }
 

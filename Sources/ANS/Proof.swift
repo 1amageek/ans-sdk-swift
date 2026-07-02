@@ -31,7 +31,7 @@ public struct Proof: Sendable, Hashable, Codable {
         var index = leafIndex
 
         for sibling in path {
-            var node = Data()
+            var node = Data([0x01])
             if index.isMultiple(of: 2) {
                 node.append(computed)
                 node.append(sibling)
@@ -44,6 +44,13 @@ public struct Proof: Sendable, Hashable, Codable {
         }
 
         return computed == rootHash
+    }
+
+    public static func internalHash(left: Data, right: Data) -> Data {
+        var data = Data([0x01])
+        data.append(left)
+        data.append(right)
+        return Data(SHA256.hash(data: data))
     }
 }
 

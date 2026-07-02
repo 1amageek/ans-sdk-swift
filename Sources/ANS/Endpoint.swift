@@ -86,4 +86,26 @@ public struct Endpoint: Sendable, Hashable, Codable {
         self.documentationURL = documentationURL
         self.functions = functions
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: AnyCodingKey.self)
+        self.url = try container.decodeFirst(URL.self, for: ["agentUrl", "url"])
+        self.protocolKind = try container.decodeFirst(ProtocolKind.self, for: ["protocol", "protocolKind"])
+        self.transports = try container.decodeFirstIfPresent([TransportKind].self, for: ["transports"]) ?? []
+        self.metadataURL = try container.decodeFirstIfPresent(URL.self, for: ["metaDataUrl", "metadataUrl", "metadataURL"])
+        self.metadataHash = try container.decodeFirstIfPresent(String.self, for: ["metaDataHash", "metadataHash"])
+        self.documentationURL = try container.decodeFirstIfPresent(URL.self, for: ["documentationUrl", "documentationURL"])
+        self.functions = try container.decodeFirstIfPresent([Function].self, for: ["functions"]) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: AnyCodingKey.self)
+        try container.encode(url, forKey: AnyCodingKey(stringValue: "agentUrl"))
+        try container.encode(protocolKind, forKey: AnyCodingKey(stringValue: "protocol"))
+        try container.encode(transports, forKey: AnyCodingKey(stringValue: "transports"))
+        try container.encodeIfPresent(metadataURL, forKey: AnyCodingKey(stringValue: "metaDataUrl"))
+        try container.encodeIfPresent(metadataHash, forKey: AnyCodingKey(stringValue: "metaDataHash"))
+        try container.encodeIfPresent(documentationURL, forKey: AnyCodingKey(stringValue: "documentationUrl"))
+        try container.encode(functions, forKey: AnyCodingKey(stringValue: "functions"))
+    }
 }

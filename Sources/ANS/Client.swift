@@ -108,12 +108,13 @@ public struct Client: Registry, TransparencyLog, Sendable {
             method: .get,
             baseURL: configuration.transparencyBaseURL,
             path: configuration.paths.badge(agent),
+            authenticated: false,
             as: Badge.self
         )
     }
 
     public func badge(at url: URL) async throws -> Badge {
-        try await send(request: Request(method: .get, url: url, headers: defaultHeaders()), as: Badge.self)
+        try await send(request: Request(method: .get, url: url, headers: readOnlyHeaders()), as: Badge.self)
     }
 
     public func audit(for agent: Agent.ID, page: Page?) async throws -> Audit {
@@ -122,6 +123,7 @@ public struct Client: Registry, TransparencyLog, Sendable {
             baseURL: configuration.transparencyBaseURL,
             path: configuration.paths.audit(agent),
             queryItems: pageItems(page),
+            authenticated: false,
             as: Audit.self
         )
     }
@@ -130,7 +132,8 @@ public struct Client: Registry, TransparencyLog, Sendable {
         let body = try await sendRaw(
             method: .get,
             baseURL: configuration.transparencyBaseURL,
-            path: configuration.paths.receipt(agent)
+            path: configuration.paths.receipt(agent),
+            authenticated: false
         )
         return Receipt(bytes: body)
     }
@@ -139,7 +142,8 @@ public struct Client: Registry, TransparencyLog, Sendable {
         let body = try await sendRaw(
             method: .get,
             baseURL: configuration.transparencyBaseURL,
-            path: configuration.paths.statusToken(agent)
+            path: configuration.paths.statusToken(agent),
+            authenticated: false
         )
         return Token(bytes: body)
     }
@@ -149,6 +153,7 @@ public struct Client: Registry, TransparencyLog, Sendable {
             method: .get,
             baseURL: configuration.transparencyBaseURL,
             path: configuration.paths.checkpoint(),
+            authenticated: false,
             as: Checkpoint.self
         )
     }
@@ -159,6 +164,7 @@ public struct Client: Registry, TransparencyLog, Sendable {
             baseURL: configuration.transparencyBaseURL,
             path: configuration.paths.checkpointHistory(),
             queryItems: pageItems(page),
+            authenticated: false,
             as: [Checkpoint].self
         )
     }
@@ -167,7 +173,8 @@ public struct Client: Registry, TransparencyLog, Sendable {
         try await sendRaw(
             method: .get,
             baseURL: configuration.transparencyBaseURL,
-            path: configuration.paths.schema(version)
+            path: configuration.paths.schema(version),
+            authenticated: false
         )
     }
 
@@ -175,7 +182,8 @@ public struct Client: Registry, TransparencyLog, Sendable {
         let body = try await sendRaw(
             method: .get,
             baseURL: configuration.transparencyBaseURL,
-            path: configuration.paths.rootKeys()
+            path: configuration.paths.rootKeys(),
+            authenticated: false
         )
         guard let text = String(data: body, encoding: .utf8) else {
             throw ParsingError("Root keys response was not UTF-8")
@@ -192,10 +200,12 @@ public struct Client: Registry, TransparencyLog, Sendable {
         baseURL: URL,
         path: String,
         queryItems: [URLQueryItem] = [],
+        authenticated: Bool = true,
         as type: Value.Type
     ) async throws -> Value {
         let url = baseURL.ansAppendingPath(path).ansAppendingQuery(queryItems)
-        return try await send(request: Request(method: method, url: url, headers: defaultHeaders()), as: type)
+        let headers = authenticated ? defaultHeaders() : readOnlyHeaders()
+        return try await send(request: Request(method: method, url: url, headers: headers), as: type)
     }
 
     private func sendJSON<Body: Encodable, Value: Decodable>(
@@ -224,9 +234,10 @@ public struct Client: Registry, TransparencyLog, Sendable {
         }
     }
 
-    private func sendRaw(method: Method, baseURL: URL, path: String) async throws -> Data {
+    private func sendRaw(method: Method, baseURL: URL, path: String, authenticated: Bool = true) async throws -> Data {
         let url = baseURL.ansAppendingPath(path)
-        let response = try await transport.send(Request(method: method, url: url, headers: defaultHeaders()))
+        let headers = authenticated ? defaultHeaders() : readOnlyHeaders()
+        let response = try await transport.send(Request(method: method, url: url, headers: headers))
         guard (200..<300).contains(response.statusCode) else {
             throw ServerError(statusCode: response.statusCode, body: response.body)
         }
@@ -239,6 +250,14 @@ public struct Client: Registry, TransparencyLog, Sendable {
         if let authorization = configuration.credential.authorizationHeader {
             headers["Authorization"] = authorization
         }
+        return headers
+    }
+
+    private func readOnlyHeaders() -> [String: String] {
+        var headers = configuration.additionalHeaders.filter { key, _ in
+            key.caseInsensitiveCompare("Authorization") != .orderedSame
+        }
+        headers["Accept"] = headers["Accept"] ?? "application/json"
         return headers
     }
 

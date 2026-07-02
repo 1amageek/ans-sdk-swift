@@ -36,7 +36,7 @@ public struct DefaultCertificateInspector: CertificateInspecting {
         if let identity = certificate.identity {
             return identity
         }
-        return CertificateIdentity(fingerprint: try fingerprint(of: certificate))
+        throw CertificateError("Certificate identity extraction requires a certificate inspector that can parse X.509 SANs")
     }
 
     public func fingerprint(of certificate: Certificate) throws -> Fingerprint {
