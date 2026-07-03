@@ -24,10 +24,11 @@ public struct URI: Sendable, Hashable, CustomStringConvertible {
             throw ParsingError.invalidURI(rawValue)
         }
 
-        let scheme = rawValue[..<colon].lowercased()
-        guard !scheme.isEmpty, scheme.utf8.allSatisfy(Self.isSchemeByte) else {
+        let rawScheme = String(rawValue[..<colon])
+        guard Self.isValidScheme(rawScheme) else {
             throw ParsingError.invalidURI(rawValue)
         }
+        let scheme = rawScheme.lowercased()
 
         let authorityStart = rawValue.index(after: secondSlash)
         let authorityEnd = rawValue[authorityStart...].firstIndex { character in
@@ -52,7 +53,7 @@ public struct URI: Sendable, Hashable, CustomStringConvertible {
     }
 
     public init(scheme: String, host: Host, port: Int? = nil, path: String = "") throws(ParsingError) {
-        guard !scheme.isEmpty, scheme.utf8.allSatisfy(Self.isSchemeByte) else {
+        guard Self.isValidScheme(scheme) else {
             throw ParsingError.invalidURI(scheme)
         }
         if let port {
@@ -162,8 +163,19 @@ extension URI {
         }
     }
 
-    private static func isSchemeByte(_ byte: UInt8) -> Bool {
-        (byte >= 97 && byte <= 122) ||
+    private static func isValidScheme(_ scheme: String) -> Bool {
+        guard let first = scheme.utf8.first, isSchemeStartByte(first) else {
+            return false
+        }
+        return scheme.utf8.dropFirst().allSatisfy(Self.isSchemeContinuationByte)
+    }
+
+    private static func isSchemeStartByte(_ byte: UInt8) -> Bool {
+        (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122)
+    }
+
+    private static func isSchemeContinuationByte(_ byte: UInt8) -> Bool {
+        isSchemeStartByte(byte) ||
             (byte >= 48 && byte <= 57) ||
             byte == 43 ||
             byte == 45 ||

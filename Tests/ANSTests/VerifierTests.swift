@@ -27,6 +27,72 @@ struct VerifierTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func returnsNotANSAgentWhenBadgeIsMissing() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+
+        let outcome = BadgeVerifier().verifyServer(host: host, fingerprint: fingerprint, badge: nil)
+
+        #expect(outcome == .notANSAgent)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rejectsMissingServerFingerprint() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+        let badge = Badge(host: host, status: .active)
+
+        let outcome = BadgeVerifier().verifyServer(host: host, fingerprint: fingerprint, badge: badge)
+
+        #expect(outcome == .rejected(.missingServerFingerprint))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rejectsTerminalBadgeStatuses() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+        let verifier = BadgeVerifier()
+
+        for status in [Badge.Status.expired, .revoked] {
+            let badge = Badge(host: host, status: status, serverFingerprint: fingerprint)
+
+            #expect(verifier.verifyServer(host: host, fingerprint: fingerprint, badge: badge) == .rejected(.badgeStatusRejected(status)))
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rejectsCertificateHostMismatch() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let certificateHost = try Host(rawValue: "other.example.com")
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+        let badge = Badge(host: host, status: .active, serverFingerprint: fingerprint)
+        let certificate = CertificateIdentity.fromFingerprint(fingerprint, commonName: certificateHost.rawValue)
+
+        let outcome = BadgeVerifier().verifyServer(host: host, certificate: certificate, badge: badge)
+
+        #expect(outcome == .rejected(.certificateHostMismatch(expected: host, actual: certificateHost)))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rejectsClientWithoutIdentityFingerprint() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let version = try Version("1.0.0")
+        let name = Name(version: version, host: host)
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+        let certificate = CertificateIdentity(
+            commonName: host.rawValue,
+            dnsNames: [host.rawValue],
+            uriNames: [name.rawValue],
+            fingerprint: fingerprint
+        )
+        let badge = Badge(name: name, host: host, status: .active)
+
+        let outcome = BadgeVerifier().verifyClient(certificate: certificate, badge: badge)
+
+        #expect(outcome == .rejected(.missingIdentityFingerprint))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func allowsDeprecatedOnlyWhenPolicyAllowsIt() throws {
         let host = try Host(rawValue: "agent.example.com")
         let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
