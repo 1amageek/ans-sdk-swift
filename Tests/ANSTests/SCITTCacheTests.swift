@@ -109,24 +109,35 @@ struct SCITTCacheTests {
         let tokenHash = SCITTVerificationCache.hash([1, 2, 3])
         let receiptHash = SCITTVerificationCache.hash([4, 5, 6])
         let fingerprint = try Fingerprint.sha256(bytes: [9])
+        let host = try Host(rawValue: "agent.example.com")
+        let context = SCITTVerificationCache.OutcomeContext(
+            certificateFingerprint: fingerprint,
+            host: host,
+            role: .server
+        )
 
         #expect(cache.insertVerifiedStatusToken(token, hash: tokenHash))
         cache.insertVerifiedReceipt(receipt, hash: receiptHash)
         #expect(cache.insertOutcome(
             SCITTVerificationCache.CachedOutcome(outcome: .verified, token: token, expiresAt: 200),
-            fingerprint: fingerprint,
+            context: context,
             tokenHash: tokenHash,
             receiptHash: receiptHash
         ))
 
         #expect(cache.verifiedStatusToken(hash: tokenHash) == token)
         #expect(cache.verifiedReceipt(hash: receiptHash) == receipt)
-        #expect(cache.outcome(fingerprint: fingerprint, tokenHash: tokenHash, receiptHash: receiptHash)?.outcome == .verified)
+        #expect(cache.outcome(context: context, tokenHash: tokenHash, receiptHash: receiptHash)?.outcome == .verified)
+        #expect(cache.outcome(
+            context: .init(certificateFingerprint: fingerprint, host: host, role: .identity),
+            tokenHash: tokenHash,
+            receiptHash: receiptHash
+        ) == nil)
 
         clock.withLock { $0 = 201 }
 
         #expect(cache.verifiedStatusToken(hash: tokenHash) == nil)
-        #expect(cache.outcome(fingerprint: fingerprint, tokenHash: tokenHash, receiptHash: receiptHash) == nil)
+        #expect(cache.outcome(context: context, tokenHash: tokenHash, receiptHash: receiptHash) == nil)
     }
 }
 

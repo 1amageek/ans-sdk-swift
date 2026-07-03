@@ -29,13 +29,11 @@ public struct SCITTConnectionVerifier: Sendable {
 
         let tokenHash = SCITTVerificationCache.hash(headers.statusToken)
         let receiptHash = headers.hasReceipt ? SCITTVerificationCache.hash(headers.receipt) : nil
-        if let cached = cache?.outcome(
-            fingerprint: certificate.fingerprint,
-            tokenHash: tokenHash,
-            receiptHash: receiptHash
-        ) {
-            return cached.outcome
-        }
+        let context = SCITTVerificationCache.OutcomeContext(
+            certificateFingerprint: certificate.fingerprint,
+            host: host,
+            role: role
+        )
 
         let token: VerifiedStatusToken
         if let cachedToken = cache?.verifiedStatusToken(hash: tokenHash) {
@@ -46,17 +44,35 @@ public struct SCITTConnectionVerifier: Sendable {
         }
         let payload = token.payload
 
-        if let receiptHash, cache?.verifiedReceipt(hash: receiptHash) == nil {
-            do {
-                let receipt = try await verifier.verifyReceipt(headers.receipt)
-                cache?.insertVerifiedReceipt(receipt, hash: receiptHash)
-            } catch {
-                if receiptPolicy == .required {
-                    throw error
-                }
-            }
+        let outcome = try outcome(for: payload, certificate: certificate, host: host, role: role)
+        if receiptPolicy == .optional,
+           !headers.hasReceipt,
+           let cached = cache?.outcome(context: context, tokenHash: tokenHash, receiptHash: nil) {
+            return cached.outcome
         }
 
+        let boundReceiptHash = try await verifiedBoundReceiptHash(
+            headers: headers,
+            receiptHash: receiptHash,
+            receiptPolicy: receiptPolicy
+        )
+        if let cached = cache?.outcome(context: context, tokenHash: tokenHash, receiptHash: boundReceiptHash) {
+            return cached.outcome
+        }
+
+        cacheOutcome(outcome, token: token, context: context, tokenHash: tokenHash, receiptHash: nil)
+        if let boundReceiptHash {
+            cacheOutcome(outcome, token: token, context: context, tokenHash: tokenHash, receiptHash: boundReceiptHash)
+        }
+        return outcome
+    }
+
+    private func outcome(
+        for payload: StatusTokenPayload,
+        certificate: CertificateIdentity,
+        host: Host,
+        role: Role
+    ) throws(SCITTError) -> Outcome {
         guard payload.status.allowsConnection else {
             throw SCITTError.invalidStatus(payload.status)
         }
@@ -76,19 +92,52 @@ public struct SCITTConnectionVerifier: Sendable {
         }
 
         if payload.status == .deprecated {
-            let outcome = Outcome.degraded(.deprecatedBadge)
-            cacheOutcome(outcome, token: token, certificate: certificate, tokenHash: tokenHash, receiptHash: receiptHash)
-            return outcome
+            return .degraded(.deprecatedBadge)
         }
-        let outcome = Outcome.verified
-        cacheOutcome(outcome, token: token, certificate: certificate, tokenHash: tokenHash, receiptHash: receiptHash)
-        return outcome
+        return .verified
+    }
+
+    private func verifiedBoundReceiptHash(
+        headers: SCITTHeaders,
+        receiptHash: [UInt8]?,
+        receiptPolicy: ReceiptPolicy
+    ) async throws(any Error) -> [UInt8]? {
+        guard let receiptHash else {
+            if receiptPolicy == .required {
+                throw SCITTError.partialHeaders
+            }
+            return nil
+        }
+
+        let receipt: VerifiedReceipt
+        if let cachedReceipt = cache?.verifiedReceipt(hash: receiptHash) {
+            receipt = cachedReceipt
+        } else {
+            do {
+                receipt = try await verifier.verifyReceipt(headers.receipt)
+            } catch {
+                if receiptPolicy == .required {
+                    throw error
+                }
+                return nil
+            }
+        }
+
+        guard receipt.eventBytes == headers.statusToken else {
+            if receiptPolicy == .required {
+                throw SCITTError.invalidToken("SCITT receipt is not bound to status token")
+            }
+            return nil
+        }
+
+        cache?.insertVerifiedReceipt(receipt, hash: receiptHash)
+        return receiptHash
     }
 
     private func cacheOutcome(
         _ outcome: Outcome,
         token: VerifiedStatusToken,
-        certificate: CertificateIdentity,
+        context: SCITTVerificationCache.OutcomeContext,
         tokenHash: [UInt8],
         receiptHash: [UInt8]?
     ) {
@@ -97,7 +146,7 @@ public struct SCITTConnectionVerifier: Sendable {
         }
         cache?.insertOutcome(
             SCITTVerificationCache.CachedOutcome(outcome: outcome, token: token, expiresAt: expiresAt),
-            fingerprint: certificate.fingerprint,
+            context: context,
             tokenHash: tokenHash,
             receiptHash: receiptHash
         )

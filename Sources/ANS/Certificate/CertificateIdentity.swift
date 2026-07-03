@@ -45,13 +45,38 @@ public struct CertificateIdentity: Sendable, Hashable {
     }
 
     public func host() throws(ParsingError) -> Host {
-        if let dnsName = dnsNames.first {
-            return try Host(rawValue: dnsName)
+        for dnsName in dnsNames {
+            do {
+                return try Host(rawValue: dnsName)
+            } catch {
+                continue
+            }
         }
         if let commonName {
             return try Host(rawValue: commonName)
         }
         throw .missingField("certificate host")
+    }
+
+    public func matches(host expectedHost: Host) -> Bool {
+        for dnsName in dnsNames {
+            do {
+                if try Host(rawValue: dnsName) == expectedHost {
+                    return true
+                }
+            } catch {
+                continue
+            }
+        }
+
+        guard dnsNames.isEmpty, let commonName else {
+            return false
+        }
+        do {
+            return try Host(rawValue: commonName) == expectedHost
+        } catch {
+            return false
+        }
     }
 
     public func ansName() throws(ParsingError) -> Name {

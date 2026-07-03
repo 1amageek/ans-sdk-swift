@@ -3,6 +3,18 @@ import Crypto
 import Synchronization
 
 public final class SCITTVerificationCache: Sendable {
+    public struct OutcomeContext: Sendable, Hashable {
+        public let certificateFingerprint: Fingerprint
+        public let host: Host
+        public let role: SCITTConnectionVerifier.Role
+
+        public init(certificateFingerprint: Fingerprint, host: Host, role: SCITTConnectionVerifier.Role) {
+            self.certificateFingerprint = certificateFingerprint
+            self.host = host
+            self.role = role
+        }
+    }
+
     public struct Configuration: Sendable, Hashable {
         public static let defaults = Configuration(maxEntries: 1000, receiptTTL: .seconds(86_400))
 
@@ -38,7 +50,7 @@ public final class SCITTVerificationCache: Sendable {
     }
 
     private struct OutcomeKey: Sendable, Hashable {
-        let fingerprint: Fingerprint
+        let context: OutcomeContext
         let tokenHash: [UInt8]
         let receiptHash: [UInt8]?
     }
@@ -140,12 +152,12 @@ public final class SCITTVerificationCache: Sendable {
     }
 
     public func outcome(
-        fingerprint: Fingerprint,
+        context: OutcomeContext,
         tokenHash: [UInt8],
         receiptHash: [UInt8]?
     ) -> CachedOutcome? {
         let now = currentUnixTime()
-        let key = OutcomeKey(fingerprint: fingerprint, tokenHash: tokenHash, receiptHash: receiptHash)
+        let key = OutcomeKey(context: context, tokenHash: tokenHash, receiptHash: receiptHash)
         return state.withLock { state in
             guard let entry = state.outcomes[key] else {
                 return nil
@@ -161,7 +173,7 @@ public final class SCITTVerificationCache: Sendable {
     @discardableResult
     public func insertOutcome(
         _ outcome: CachedOutcome,
-        fingerprint: Fingerprint,
+        context: OutcomeContext,
         tokenHash: [UInt8],
         receiptHash: [UInt8]?
     ) -> Bool {
@@ -169,7 +181,7 @@ public final class SCITTVerificationCache: Sendable {
             return false
         }
 
-        let key = OutcomeKey(fingerprint: fingerprint, tokenHash: tokenHash, receiptHash: receiptHash)
+        let key = OutcomeKey(context: context, tokenHash: tokenHash, receiptHash: receiptHash)
         state.withLock { state in
             if state.outcomes[key] == nil {
                 state.outcomeOrder.append(key)

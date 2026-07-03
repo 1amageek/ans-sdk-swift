@@ -74,6 +74,22 @@ struct VerifierTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func acceptsCertificateWhenExpectedHostIsNotFirstDNSName() throws {
+        let host = try Host(rawValue: "agent.example.com")
+        let fingerprint = try Fingerprint.sha256(bytes: [1, 2, 3])
+        let badge = Badge(host: host, status: .active, serverFingerprint: fingerprint)
+        let certificate = CertificateIdentity(
+            commonName: "other.example.com",
+            dnsNames: ["other.example.com", host.rawValue],
+            fingerprint: fingerprint
+        )
+
+        let outcome = BadgeVerifier().verifyServer(host: host, certificate: certificate, badge: badge)
+
+        #expect(outcome == .verified)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func rejectsClientWithoutIdentityFingerprint() throws {
         let host = try Host(rawValue: "agent.example.com")
         let version = try Version("1.0.0")

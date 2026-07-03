@@ -33,13 +33,13 @@ public struct BadgeVerifier: Sendable {
             return fingerprintOutcome
         }
 
-        do {
-            let certificateHost = try certificate.host()
-            guard certificateHost == host else {
+        guard certificate.matches(host: host) else {
+            do {
+                let certificateHost = try certificate.host()
                 return .rejected(.certificateHostMismatch(expected: host, actual: certificateHost))
+            } catch {
+                return .rejected(.missingCertificateHost)
             }
-        } catch {
-            return .rejected(.missingCertificateHost)
         }
 
         return fingerprintOutcome

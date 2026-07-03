@@ -118,6 +118,9 @@ private struct Decoder {
             value = .bytes(try readBytes(length: readLength(additional)))
         case 3:
             let textBytes = try readBytes(length: readLength(additional))
+            guard Self.isValidUTF8(textBytes) else {
+                throw .invalidUTF8
+            }
             let text = String(decoding: textBytes, as: UTF8.self)
             value = .text(text)
         case 4:
@@ -229,6 +232,80 @@ private struct Decoder {
         default:
             throw .invalidType
         }
+    }
+
+    private static func isValidUTF8(_ bytes: [UInt8]) -> Bool {
+        var index = 0
+        while index < bytes.count {
+            let byte = bytes[index]
+            if byte <= 0x7f {
+                index += 1
+            } else if byte >= 0xc2 && byte <= 0xdf {
+                guard isContinuation(bytes, at: index + 1) else {
+                    return false
+                }
+                index += 2
+            } else if byte == 0xe0 {
+                guard isByte(bytes, at: index + 1, in: 0xa0...0xbf),
+                      isContinuation(bytes, at: index + 2) else {
+                    return false
+                }
+                index += 3
+            } else if byte >= 0xe1 && byte <= 0xec {
+                guard isContinuation(bytes, at: index + 1),
+                      isContinuation(bytes, at: index + 2) else {
+                    return false
+                }
+                index += 3
+            } else if byte == 0xed {
+                guard isByte(bytes, at: index + 1, in: 0x80...0x9f),
+                      isContinuation(bytes, at: index + 2) else {
+                    return false
+                }
+                index += 3
+            } else if byte >= 0xee && byte <= 0xef {
+                guard isContinuation(bytes, at: index + 1),
+                      isContinuation(bytes, at: index + 2) else {
+                    return false
+                }
+                index += 3
+            } else if byte == 0xf0 {
+                guard isByte(bytes, at: index + 1, in: 0x90...0xbf),
+                      isContinuation(bytes, at: index + 2),
+                      isContinuation(bytes, at: index + 3) else {
+                    return false
+                }
+                index += 4
+            } else if byte >= 0xf1 && byte <= 0xf3 {
+                guard isContinuation(bytes, at: index + 1),
+                      isContinuation(bytes, at: index + 2),
+                      isContinuation(bytes, at: index + 3) else {
+                    return false
+                }
+                index += 4
+            } else if byte == 0xf4 {
+                guard isByte(bytes, at: index + 1, in: 0x80...0x8f),
+                      isContinuation(bytes, at: index + 2),
+                      isContinuation(bytes, at: index + 3) else {
+                    return false
+                }
+                index += 4
+            } else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func isContinuation(_ bytes: [UInt8], at index: Int) -> Bool {
+        isByte(bytes, at: index, in: 0x80...0xbf)
+    }
+
+    private static func isByte(_ bytes: [UInt8], at index: Int, in range: ClosedRange<UInt8>) -> Bool {
+        guard index < bytes.count else {
+            return false
+        }
+        return range.contains(bytes[index])
     }
 }
 
