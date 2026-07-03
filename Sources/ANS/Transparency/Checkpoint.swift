@@ -1,17 +1,36 @@
-import Foundation
+public struct Checkpoint: Sendable, Hashable {
+    public let logSize: Int?
+    public let rootHash: String?
+    public let originName: String?
+    public let checkpointText: String?
+    public let createdAt: String?
 
-public struct Checkpoint: Sendable, Hashable, Codable {
-    public let origin: String
-    public let treeSize: UInt64
-    public let rootHash: Data
-    public let signature: Data
-    public let rawBytes: Data
-
-    public init(origin: String, treeSize: UInt64, rootHash: Data, signature: Data, rawBytes: Data = Data()) {
-        self.origin = origin
-        self.treeSize = treeSize
+    public init(
+        logSize: Int? = nil,
+        rootHash: String? = nil,
+        originName: String? = nil,
+        checkpointText: String? = nil,
+        createdAt: String? = nil
+    ) {
+        self.logSize = logSize
         self.rootHash = rootHash
-        self.signature = signature
-        self.rawBytes = rawBytes
+        self.originName = originName
+        self.checkpointText = checkpointText
+        self.createdAt = createdAt
     }
 }
+
+public struct CheckpointHistory: Sendable, Hashable {
+    public let checkpoints: [Checkpoint]
+    public let pagination: Page?
+
+    public init(checkpoints: [Checkpoint], pagination: Page? = nil) {
+        self.checkpoints = checkpoints
+        self.pagination = pagination
+    }
+}
+
+#if !hasFeature(Embedded)
+extension Checkpoint: Codable {}
+extension CheckpointHistory: Codable {}
+#endif

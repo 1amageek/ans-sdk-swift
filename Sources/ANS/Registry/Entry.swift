@@ -1,23 +1,24 @@
-import Foundation
-
-public struct Entry: Sendable, Hashable, Codable {
-    public struct ID: Sendable, Hashable, Codable, CustomStringConvertible {
+public struct Entry: Sendable, Hashable {
+    public struct ID: Sendable, Hashable, RawRepresentable, CustomStringConvertible {
         public let rawValue: String
 
-        public init(_ rawValue: String) {
+        public var description: String {
+            rawValue
+        }
+
+        public init(rawValue: String) {
             self.rawValue = rawValue
         }
+    }
 
-        public var description: String { rawValue }
+    public let id: ID
 
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            self.init(try container.decode(String.self))
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            try container.encode(rawValue)
-        }
+    public init(id: ID) {
+        self.id = id
     }
 }
+
+#if !hasFeature(Embedded)
+extension Entry.ID: Codable {}
+extension Entry: Codable {}
+#endif

@@ -1,23 +1,13 @@
-import Foundation
-
-public struct Agent: Sendable, Hashable, Codable, Identifiable {
-    public struct ID: Sendable, Hashable, Codable, CustomStringConvertible {
+public struct Agent: Sendable, Hashable, Identifiable {
+    public struct ID: Sendable, Hashable, RawRepresentable, CustomStringConvertible {
         public let rawValue: String
 
-        public init(_ rawValue: String) {
+        public var description: String {
+            rawValue
+        }
+
+        public init(rawValue: String) {
             self.rawValue = rawValue
-        }
-
-        public var description: String { rawValue }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            self.init(try container.decode(String.self))
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            try container.encode(rawValue)
         }
     }
 
@@ -30,6 +20,11 @@ public struct Agent: Sendable, Hashable, Codable, Identifiable {
     public let version: Version?
     public let status: Registration.Status
     public let endpoints: [Endpoint]
+    public let ttl: Int?
+    public let registrationTimestamp: String?
+    public let lastRenewalTimestamp: String?
+    public let links: [Registration.Link]
+    public let identities: [Identity.LinkedIdentity]
 
     public init(
         id: ID,
@@ -40,7 +35,12 @@ public struct Agent: Sendable, Hashable, Codable, Identifiable {
         description: String? = nil,
         version: Version? = nil,
         status: Registration.Status,
-        endpoints: [Endpoint] = []
+        endpoints: [Endpoint],
+        ttl: Int? = nil,
+        registrationTimestamp: String? = nil,
+        lastRenewalTimestamp: String? = nil,
+        links: [Registration.Link] = [],
+        identities: [Identity.LinkedIdentity] = []
     ) {
         self.id = id
         self.entryID = entryID
@@ -51,31 +51,38 @@ public struct Agent: Sendable, Hashable, Codable, Identifiable {
         self.version = version
         self.status = status
         self.endpoints = endpoints
+        self.ttl = ttl
+        self.registrationTimestamp = registrationTimestamp
+        self.lastRenewalTimestamp = lastRenewalTimestamp
+        self.links = links
+        self.identities = identities
     }
 
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: AnyCodingKey.self)
-        self.id = try container.decodeFirst(ID.self, for: ["agentId", "id"])
-        self.entryID = try container.decodeFirstIfPresent(Entry.ID.self, for: ["ansId", "entryId", "entryID"])
-        self.name = try container.decodeFirstIfPresent(Name.self, for: ["ansName", "name"])
-        self.host = try container.decodeFirst(Host.self, for: ["agentHost", "host"])
-        self.displayName = try container.decodeFirst(String.self, for: ["agentDisplayName", "displayName"])
-        self.description = try container.decodeFirstIfPresent(String.self, for: ["agentDescription", "description"])
-        self.version = try container.decodeFirstIfPresent(Version.self, for: ["version"])
-        self.status = try container.decodeFirst(Registration.Status.self, for: ["agentStatus", "status"])
-        self.endpoints = try container.decodeFirstIfPresent([Endpoint].self, for: ["endpoints"]) ?? []
-    }
+    public struct Page: Sendable, Hashable {
+        public let items: [Agent]
+        public let returnedCount: Int
+        public let limit: Int
+        public let nextCursor: String?
+        public let hasMore: Bool
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: AnyCodingKey.self)
-        try container.encode(id, forKey: AnyCodingKey(stringValue: "agentId"))
-        try container.encodeIfPresent(entryID, forKey: AnyCodingKey(stringValue: "ansId"))
-        try container.encodeIfPresent(name, forKey: AnyCodingKey(stringValue: "ansName"))
-        try container.encode(host, forKey: AnyCodingKey(stringValue: "agentHost"))
-        try container.encode(displayName, forKey: AnyCodingKey(stringValue: "agentDisplayName"))
-        try container.encodeIfPresent(description, forKey: AnyCodingKey(stringValue: "agentDescription"))
-        try container.encodeIfPresent(version, forKey: AnyCodingKey(stringValue: "version"))
-        try container.encode(status, forKey: AnyCodingKey(stringValue: "agentStatus"))
-        try container.encode(endpoints, forKey: AnyCodingKey(stringValue: "endpoints"))
+        public init(
+            items: [Agent],
+            returnedCount: Int,
+            limit: Int,
+            nextCursor: String? = nil,
+            hasMore: Bool
+        ) {
+            self.items = items
+            self.returnedCount = returnedCount
+            self.limit = limit
+            self.nextCursor = nextCursor
+            self.hasMore = hasMore
+        }
     }
 }
+
+#if !hasFeature(Embedded)
+extension Agent.ID: Codable {}
+extension Agent: Codable {}
+extension Agent.Page: Codable {}
+#endif

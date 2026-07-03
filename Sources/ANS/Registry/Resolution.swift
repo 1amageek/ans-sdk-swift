@@ -1,6 +1,4 @@
-import Foundation
-
-public struct Resolution: Sendable, Hashable, Codable {
+public struct Resolution: Sendable, Hashable {
     public let agent: Agent
     public let endpoint: Endpoint?
 
@@ -9,3 +7,7 @@ public struct Resolution: Sendable, Hashable, Codable {
         self.endpoint = endpoint
     }
 }
+
+#if !hasFeature(Embedded)
+extension Resolution: Codable {}
+#endif

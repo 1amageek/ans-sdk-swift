@@ -1,4 +1,4 @@
-// swift-tools-version: 6.4
+// swift-tools-version: 6.3
 
 import PackageDescription
 
@@ -13,12 +13,26 @@ let package = Package(
     ],
     products: [
         .library(name: "ANS", targets: ["ANS"]),
-        .library(name: "ANSEmbedded", targets: ["ANSEmbedded"]),
+    ],
+    dependencies: [
+        .package(
+            url: "https://github.com/1amageek/swift-crypto.git",
+            revision: "65cc0779dbf34edf10dce27ddac6e60aeb258b71"
+        ),
     ],
     targets: [
-        .target(name: "ANS"),
-        .target(name: "ANSEmbedded"),
-        .testTarget(name: "ANSTests", dependencies: ["ANS"]),
-        .testTarget(name: "ANSEmbeddedTests", dependencies: ["ANSEmbedded"]),
+        .target(
+            name: "ANS",
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("MemberImportVisibility"),
+            ]
+        ),
+        .testTarget(
+            name: "ANSTests",
+            dependencies: ["ANS"]
+        ),
     ]
 )

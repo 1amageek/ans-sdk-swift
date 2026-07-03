@@ -1,0 +1,23 @@
+{
+  "originHash" : "b0338ec16781357abb5c3d49701a126c65fadc20e71c1b24d0ef8e39d0c16480",
+  "pins" : [
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-asn1.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-crypto.git",
+      "state" : {
+        "revision" : "65cc0779dbf34edf10dce27ddac6e60aeb258b71"
+      }
+    }
+  ],
+  "version" : 3
+}

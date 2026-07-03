@@ -1,10 +1,6 @@
-.DS_Store
 .build/
+.swiftpm/
 DerivedData/
-*.xcodeproj
-*.xcworkspace
-xcuserdata/
-*.xcuserstate
-*.pem
-*.key
-*.p8
+*.xcodeproj/
+*.xcworkspace/
+.DS_Store

@@ -1,74 +1,122 @@
-import Foundation
-
-public struct Host: Sendable, Hashable, Codable, CustomStringConvertible {
+public struct Host: Sendable, Hashable, CustomStringConvertible {
     public let rawValue: String
 
-    public init(rawValue: String) throws {
-        let normalized = rawValue.lowercased()
-        try Self.validate(normalized)
+    public var description: String {
+        rawValue
+    }
+
+    public init(rawValue: String) throws(ParsingError) {
+        let normalized = rawValue.lowercased().trimmingSuffix(".")
+        guard Self.isValid(normalized) else {
+            throw ParsingError.invalidHost(rawValue)
+        }
+
         self.rawValue = normalized
     }
 
-    public init(_ rawValue: String) throws {
-        try self.init(rawValue: rawValue)
+}
+
+public extension Host {
+    var ansBadgeName: String {
+        "_ans-badge.\(rawValue)"
     }
 
-    public var description: String { rawValue }
-
-    private static func validate(_ value: String) throws {
-        guard !value.isEmpty else {
-            throw ParsingError("Host must not be empty")
-        }
-        guard value.utf8.count <= 237 else {
-            throw ParsingError("Host exceeds ANS length limit")
-        }
-        guard !value.hasSuffix(".") else {
-            throw ParsingError("Host must not include a trailing dot")
-        }
-        guard value.contains(".") else {
-            throw ParsingError("Host must be a fully qualified domain name")
-        }
-        guard !isIPv4(value), !value.contains(":") else {
-            throw ParsingError("Host must not be an IP literal")
-        }
-
-        let labels = value.split(separator: ".", omittingEmptySubsequences: false)
-        for label in labels {
-            guard !label.isEmpty else {
-                throw ParsingError("Host labels must not be empty")
-            }
-            guard label.utf8.count <= 63 else {
-                throw ParsingError("Host label exceeds 63 octets")
-            }
-            guard label.first != "-", label.last != "-" else {
-                throw ParsingError("Host labels must not start or end with a hyphen")
-            }
-            guard label.allSatisfy({ character in
-                character.isASCII && (character.isLetter || character.isNumber || character == "-")
-            }) else {
-                throw ParsingError("Host labels must contain only letters, digits, or hyphens")
-            }
-        }
+    var raBadgeName: String {
+        "_ra-badge.\(rawValue)"
     }
 
-    private static func isIPv4(_ value: String) -> Bool {
-        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 4 else { return false }
-        for part in parts {
-            guard !part.isEmpty, part.allSatisfy(\.isNumber), let octet = Int(part), (0...255).contains(octet) else {
-                return false
-            }
-        }
-        return true
+    func tlsaName(port: UInt16 = 443) -> String {
+        "_\(port)._tcp.\(rawValue)"
     }
+}
 
+private extension String {
+    func trimmingSuffix(_ suffix: String) -> String {
+        guard hasSuffix(suffix) else {
+            return self
+        }
+        return String(dropLast(suffix.count))
+    }
+}
+
+#if !hasFeature(Embedded)
+extension Host: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        try self.init(rawValue: container.decode(String.self))
+        let rawValue = try container.decode(String.self)
+        do {
+            try self.init(rawValue: rawValue)
+        } catch let error {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "\(error)")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
+    }
+}
+#endif
+
+extension Host {
+    private static func isValid(_ host: String) -> Bool {
+        guard !host.isEmpty, host.utf8.count <= 253 else {
+            return false
+        }
+
+        guard !host.hasPrefix("."), !host.hasSuffix("."), !host.contains(":"), !host.contains("[") else {
+            return false
+        }
+
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2 else {
+            return false
+        }
+
+        if isIPv4(labels) {
+            return false
+        }
+
+        for label in labels {
+            guard isValidLabel(label) else {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private static func isValidLabel(_ label: Substring) -> Bool {
+        guard !label.isEmpty, label.utf8.count <= 63 else {
+            return false
+        }
+
+        guard label.first != "-", label.last != "-" else {
+            return false
+        }
+
+        return label.utf8.allSatisfy { byte in
+            (byte >= 97 && byte <= 122) ||
+                (byte >= 48 && byte <= 57) ||
+                byte == 45
+        }
+    }
+
+    private static func isIPv4(_ labels: [Substring]) -> Bool {
+        guard labels.count == 4 else {
+            return false
+        }
+
+        for label in labels {
+            guard label.utf8.allSatisfy({ byte in byte >= 48 && byte <= 57 }) else {
+                return false
+            }
+
+            guard let value = Int(label), value >= 0, value <= 255 else {
+                return false
+            }
+        }
+
+        return true
     }
 }

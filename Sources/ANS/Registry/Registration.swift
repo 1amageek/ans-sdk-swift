@@ -1,184 +1,190 @@
-import Foundation
-
 public enum Registration {
-    public struct Status: CanonicalWireValue, ExpressibleByStringLiteral {
+    public struct Status: Sendable, Hashable, RawRepresentable, CustomStringConvertible {
         public let rawValue: String
 
-        public init(_ rawValue: String) {
-            self.rawValue = rawValue
+        public var description: String {
+            rawValue
         }
 
-        public init(stringLiteral value: String) {
-            self.init(value)
+        public init(rawValue: String) {
+            self.rawValue = rawValue.uppercased()
         }
 
-        public static let pendingValidation = Self("PENDING_VALIDATION")
-        public static let pendingCertificates = Self("PENDING_CERTS")
-        public static let pendingDNS = Self("PENDING_DNS")
-        public static let active = Self("ACTIVE")
-        public static let deprecated = Self("DEPRECATED")
-        public static let revoked = Self("REVOKED")
-        public static let expired = Self("EXPIRED")
-        public static let failed = Self("FAILED")
-
-        public var isTerminal: Bool {
-            self == .revoked || self == .expired
-        }
+        public static let pendingValidation = Self(rawValue: "PENDING_VALIDATION")
+        public static let pendingCertificates = Self(rawValue: "PENDING_CERTS")
+        public static let pendingDNS = Self(rawValue: "PENDING_DNS")
+        public static let active = Self(rawValue: "ACTIVE")
+        public static let deprecated = Self(rawValue: "DEPRECATED")
+        public static let revoked = Self(rawValue: "REVOKED")
+        public static let expired = Self(rawValue: "EXPIRED")
+        public static let failed = Self(rawValue: "FAILED")
     }
 
-    public struct DiscoveryProfile: CanonicalWireValue, ExpressibleByStringLiteral {
-        public let rawValue: String
-
-        public init(_ rawValue: String) {
-            self.rawValue = rawValue
-        }
-
-        public init(stringLiteral value: String) {
-            self.init(value)
-        }
-
-        public static let dnsAID = Self("ANS_DNSAID")
-        public static let txt = Self("ANS_TXT")
-        public static let svcb = Self("ANS_SVCB")
-    }
-
-    public struct Request: Sendable, Hashable, Codable {
+    public struct Request: Sendable, Hashable {
         public let displayName: String
         public let host: Host
         public let endpoints: [Endpoint]
-        public let version: Version?
-        public let identityCSR: String?
-        public let serverCSR: String?
-        public let serverCertificate: String?
+        public let version: Version
+        public let identityCSRPEM: String?
+        public let serverCSRPEM: String?
+        public let serverCertificatePEM: String?
+        public let serverCertificateChainPEM: String?
         public let description: String?
-        public let discoveryProfiles: [DiscoveryProfile]
+        public let discoveryProfiles: [WireValue]
 
         public init(
             displayName: String,
             host: Host,
             endpoints: [Endpoint],
-            version: Version? = nil,
-            identityCSR: String? = nil,
-            serverCSR: String? = nil,
-            serverCertificate: String? = nil,
+            version: Version,
+            identityCSRPEM: String? = nil,
+            serverCSRPEM: String? = nil,
+            serverCertificatePEM: String? = nil,
+            serverCertificateChainPEM: String? = nil,
             description: String? = nil,
-            discoveryProfiles: [DiscoveryProfile] = []
-        ) throws {
+            discoveryProfiles: [WireValue] = []
+        ) throws(ValidationError) {
+            guard !displayName.isEmpty, displayName.count <= 64 else {
+                throw ValidationError.invalidDisplayName
+            }
+
+            if let description {
+                guard description.count <= 150 else {
+                    throw ValidationError.invalidDescription
+                }
+            }
+
+            guard !endpoints.isEmpty else {
+                throw ValidationError.emptyEndpoints
+            }
+
+            for endpoint in endpoints {
+                guard endpoint.url.host == host else {
+                    throw ValidationError.endpointHostMismatch(expected: host, actual: endpoint.url.host)
+                }
+            }
+
             self.displayName = displayName
             self.host = host
             self.endpoints = endpoints
             self.version = version
-            self.identityCSR = identityCSR
-            self.serverCSR = serverCSR
-            self.serverCertificate = serverCertificate
+            self.identityCSRPEM = identityCSRPEM
+            self.serverCSRPEM = serverCSRPEM
+            self.serverCertificatePEM = serverCertificatePEM
+            self.serverCertificateChainPEM = serverCertificateChainPEM
             self.description = description
             self.discoveryProfiles = discoveryProfiles
-            try validate()
-        }
-
-        public func validate() throws {
-            guard !displayName.isEmpty, displayName.count <= 64 else {
-                throw ValidationError("Display name must be 1...64 characters")
-            }
-            if let description {
-                guard description.count <= 150 else {
-                    throw ValidationError("Description must be 150 characters or fewer")
-                }
-            }
-            guard !endpoints.isEmpty else {
-                throw ValidationError("Registration requires at least one endpoint")
-            }
-            guard (version == nil) == (identityCSR == nil) else {
-                throw ValidationError("Version and identity CSR must be jointly present or absent")
-            }
-            for endpoint in endpoints {
-                guard endpoint.url.host?.lowercased() == host.rawValue else {
-                    throw ValidationError("Endpoint authority must match the agent host")
-                }
-            }
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case displayName = "agentDisplayName"
-            case host = "agentHost"
-            case endpoints
-            case version
-            case identityCSR = "identityCsrPEM"
-            case serverCSR = "serverCsrPEM"
-            case serverCertificate = "serverCertificatePEM"
-            case description = "agentDescription"
-            case discoveryProfiles
         }
     }
 
-    public struct Challenge: Sendable, Hashable, Codable {
-        public let type: String
-        public let dnsRecord: String?
-        public let httpURL: URL?
-        public let token: String
-        public let expiresAt: Date?
+    public struct Pending: Sendable, Hashable {
+        public let agent: Agent
+        public let status: Status?
+        public let expiresAt: String?
+        public let challenges: [Challenge]
+        public let dnsRecords: [DNSRecord]
+        public let links: [Link]
+        public let steps: [Step]
 
-        public init(type: String, dnsRecord: String? = nil, httpURL: URL? = nil, token: String, expiresAt: Date? = nil) {
+        public init(
+            agent: Agent,
+            status: Status? = nil,
+            expiresAt: String? = nil,
+            challenges: [Challenge] = [],
+            dnsRecords: [DNSRecord] = [],
+            links: [Link] = [],
+            steps: [Step] = []
+        ) {
+            self.agent = agent
+            self.status = status
+            self.expiresAt = expiresAt
+            self.challenges = challenges
+            self.dnsRecords = dnsRecords
+            self.links = links
+            self.steps = steps
+        }
+    }
+
+    public struct Step: Sendable, Hashable {
+        public let kind: WireValue
+        public let message: String
+
+        public init(kind: WireValue, message: String) {
+            self.kind = kind
+            self.message = message
+        }
+    }
+
+    public struct Challenge: Sendable, Hashable {
+        public let type: WireValue
+        public let token: String?
+        public let keyAuthorization: String?
+        public let httpPath: String?
+        public let dnsRecord: DNSRecord?
+        public let expiresAt: String?
+
+        public init(
+            type: WireValue,
+            token: String? = nil,
+            keyAuthorization: String? = nil,
+            httpPath: String? = nil,
+            dnsRecord: DNSRecord? = nil,
+            expiresAt: String? = nil
+        ) {
             self.type = type
-            self.dnsRecord = dnsRecord
-            self.httpURL = httpURL
             self.token = token
+            self.keyAuthorization = keyAuthorization
+            self.httpPath = httpPath
+            self.dnsRecord = dnsRecord
             self.expiresAt = expiresAt
         }
     }
 
-    public struct Step: Sendable, Hashable, Codable {
-        public let action: String
-        public let description: String
+    public struct DNSRecord: Sendable, Hashable {
+        public let name: String
+        public let type: WireValue
+        public let value: String
+        public let purpose: WireValue?
+        public let ttl: Int?
+        public let priority: Int?
+        public let required: Bool
 
-        public init(action: String, description: String) {
-            self.action = action
-            self.description = description
+        public init(
+            name: String,
+            type: WireValue,
+            value: String,
+            purpose: WireValue? = nil,
+            ttl: Int? = nil,
+            priority: Int? = nil,
+            required: Bool = false
+        ) {
+            self.name = name
+            self.type = type
+            self.value = value
+            self.purpose = purpose
+            self.ttl = ttl
+            self.priority = priority
+            self.required = required
         }
     }
 
-    public struct Pending: Sendable, Hashable, Codable {
-        public let agentID: Agent.ID?
-        public let name: Name?
-        public let status: Status
-        public let challenges: [Challenge]
-        public let dnsRecords: [DNSRecord]
-        public let nextSteps: [Step]
+    public struct Link: Sendable, Hashable {
+        public let href: String
+        public let rel: String
 
-        public init(
-            agentID: Agent.ID?,
-            name: Name?,
-            status: Status,
-            challenges: [Challenge] = [],
-            dnsRecords: [DNSRecord] = [],
-            nextSteps: [Step] = []
-        ) {
-            self.agentID = agentID
-            self.name = name
-            self.status = status
-            self.challenges = challenges
-            self.dnsRecords = dnsRecords
-            self.nextSteps = nextSteps
-        }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: AnyCodingKey.self)
-            self.agentID = try container.decodeFirstIfPresent(Agent.ID.self, for: ["agentId", "agentID"])
-            self.name = try container.decodeFirstIfPresent(Name.self, for: ["ansName", "name"])
-            self.status = try container.decodeFirst(Status.self, for: ["status", "agentStatus"])
-            self.challenges = try container.decodeFirstIfPresent([Challenge].self, for: ["challenges"]) ?? []
-            self.dnsRecords = try container.decodeFirstIfPresent([DNSRecord].self, for: ["dnsRecords"]) ?? []
-            self.nextSteps = try container.decodeFirstIfPresent([Step].self, for: ["nextSteps"]) ?? []
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: AnyCodingKey.self)
-            try container.encodeIfPresent(agentID, forKey: AnyCodingKey(stringValue: "agentId"))
-            try container.encodeIfPresent(name, forKey: AnyCodingKey(stringValue: "ansName"))
-            try container.encode(status, forKey: AnyCodingKey(stringValue: "status"))
-            try container.encode(challenges, forKey: AnyCodingKey(stringValue: "challenges"))
-            try container.encode(dnsRecords, forKey: AnyCodingKey(stringValue: "dnsRecords"))
-            try container.encode(nextSteps, forKey: AnyCodingKey(stringValue: "nextSteps"))
+        public init(href: String, rel: String) {
+            self.href = href
+            self.rel = rel
         }
     }
 }
+
+#if !hasFeature(Embedded)
+extension Registration.Status: Codable {}
+extension Registration.Request: Codable {}
+extension Registration.Pending: Codable {}
+extension Registration.Step: Codable {}
+extension Registration.Challenge: Codable {}
+extension Registration.DNSRecord: Codable {}
+extension Registration.Link: Codable {}
+#endif

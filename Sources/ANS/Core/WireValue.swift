@@ -1,21 +1,25 @@
-import Foundation
-
-public struct WireValue: Sendable, Hashable, Codable, ExpressibleByStringLiteral, CustomStringConvertible {
+public struct WireValue: Sendable, Hashable, RawRepresentable, CustomStringConvertible {
     public let rawValue: String
+
+    public var description: String {
+        rawValue
+    }
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
 
     public init(_ rawValue: String) {
         self.rawValue = rawValue
     }
 
-    public init(stringLiteral value: String) {
-        self.init(value)
-    }
+}
 
-    public var description: String { rawValue }
-
+#if !hasFeature(Embedded)
+extension WireValue: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(try container.decode(String.self))
+        self.rawValue = try container.decode(String.self)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -23,3 +27,4 @@ public struct WireValue: Sendable, Hashable, Codable, ExpressibleByStringLiteral
         try container.encode(rawValue)
     }
 }
+#endif

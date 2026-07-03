@@ -1,103 +1,48 @@
 # ANS Swift SDK Philosophy
 
-This document defines the design philosophy for `ans-sdk-swift`.
-Concrete API and file layout requirements belong in `SPEC.md`.
-
-## Purpose
-
-`ans-sdk-swift` should make Agent Name Service usable from Swift without copying
-the shape of the Go, Java, or Rust SDKs.
-
-The SDK should feel like Swift 6.4: value-oriented, protocol-oriented,
-concurrency-safe, and explicit about trust decisions.
+`ans-sdk-swift` is a Swift-native trust SDK for Agent Name Service. The module
+name is the namespace, so public types use primitive names such as `Name`,
+`Host`, `Verifier`, and `Client`.
 
 ```mermaid
 flowchart LR
-  Evidence["Evidence"] --> Protocols["Capabilities"]
-  Protocols --> Values["Value Types"]
-  Values --> Effects["Isolated Effects"]
-  Effects --> Decision["Trust Decision"]
+  Values["Validated values"] --> Capabilities["Protocol capabilities"]
+  Capabilities --> Effects["Isolated effects"]
+  Effects --> Outcomes["Typed outcomes"]
 ```
 
 ## Principles
 
-### The module is the namespace
-
-The package product should be `ANS`. Public types should avoid redundant `ANS`
-prefixes because users already access them through the module namespace.
-The SDK should not define a wrapper namespace type such as `enum ANS`; the Swift
-module itself is the namespace. Public documentation should use unqualified
-symbols after `import ANS`. Swift module selector syntax is for name collisions.
-
-| Prefer | Avoid |
+| Principle | Design consequence |
 | --- | --- |
-| `Name` | `ANSName` |
-| `Version` | `ANSVersion` |
-| `Client` | `ANSClient` |
-| `Verifier` | `ANSVerifier` |
+| The module is the namespace | Use `ANS.Name`; use `ANS::Name` only for collisions |
+| Values first | Parse protocol evidence into validated value types early |
+| Protocol boundaries | External systems are capabilities, not base classes |
+| Effects are explicit | Network, DNS, storage, and certificate inspection live behind protocols |
+| Portable by default | Core verification does not require URLSession, Dispatch, or platform stores |
+| Fail closed | Ambiguous evidence returns typed rejection or absence outcomes |
+| Preserve evidence | Fingerprints, wire statuses, and unknown values keep their exact meaning |
 
-When a local or imported symbol collides, use the module selector explicitly:
-`ANS::Name`.
+## Foundation Model
 
-### Protocols define capabilities
+The `ANS` target is a single shared core. It uses standard-library values and
+`Crypto` for portable hashing. When `FoundationEssentials` is available, the SDK
+adds Data and JSON conveniences. When only `Foundation` is available, the same
+conveniences are compiled against the Foundation surface. The core public model
+does not make URLSession, FoundationNetworking, or platform certificate stores
+mandatory.
 
-Protocols should describe what a dependency can do, not what concrete
-implementation it uses. Concrete adapters should be replaceable.
-
-### Values carry protocol meaning
-
-Security-relevant data should become validated values as early as possible:
-names, versions, hosts, fingerprints, policies, badges, proofs, and outcomes.
-
-### Effects are isolated
-
-Networking, DNS, cache mutation, certificate loading, and transparency-log
-verification are effects. They should be isolated behind protocols. Use actors
-for I/O and suspension boundaries; use `Mutex` for short memory-only critical
-sections.
-
-### Embedded runtimes are first-class
-
-Robots and constrained devices may not have Foundation, URLSession, JSON, or
-CryptoKit. The SDK should keep a Foundation-free embedded surface for validated
-names, hosts, fingerprints, badges, and static verification. Rich adapters
-belong in the full `ANS` target; deterministic runtime verification belongs in
-`ANSEmbedded`.
-
-### Verification is a first-class workflow
-
-Registration creates evidence. Discovery finds evidence. Verification decides
-whether the running endpoint should be trusted.
-
-### Fail closed by default
-
-Ambiguous evidence should produce an explicit rejection unless the caller has
-selected a clearly named relaxed policy.
-
-### Preserve exact evidence
-
-Signed payloads, SCITT receipts, status tokens, Merkle proofs, checkpoints, and
-certificate DER bytes should remain available as exact bytes wherever
-verification depends on exact representation.
-
-### Specification drift is normal
-
-ANS is evolving. The SDK should preserve unknown wire values while continuing
-to enforce security-critical invariants.
-
-### File names should be primitive
-
-File names should name the primary type or capability directly. Prefixes that
-repeat the package name are noise.
-
-| Prefer | Avoid |
-| --- | --- |
-| `Name.swift` | `ANSName.swift` |
-| `Client.swift` | `ANSClient.swift` |
-| `Verifier.swift` | `ANSVerifier.swift` |
-| `Registry.swift` | `ANSRegistryClient.swift` |
+```mermaid
+flowchart TB
+  Core["ANS core values"] --> Crypto["swift-crypto"]
+  Core --> Verify["Badge verification"]
+  FoundationEssentials["FoundationEssentials available"] --> JSON["JSON/Data conveniences"]
+  Foundation["Foundation available"] --> JSON
+  Runtime["Host runtime"] --> Transport["Transport protocol"]
+  Transport --> Core
+```
 
 ## Operating Sentence
 
-`ans-sdk-swift` should be a Swift-native trust SDK: small validated values,
-protocol-defined capabilities, actor-isolated effects, and explicit outcomes.
+ANS for Swift should be small validated values, protocol-defined capabilities,
+portable crypto primitives, and explicit trust outcomes.

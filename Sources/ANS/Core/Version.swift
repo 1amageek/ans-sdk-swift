@@ -1,58 +1,92 @@
-import Foundation
-
-public struct Version: Sendable, Hashable, Codable, Comparable, CustomStringConvertible {
+public struct Version: Sendable, Hashable, Comparable, CustomStringConvertible {
     public let major: Int
     public let minor: Int
     public let patch: Int
 
-    public init(major: Int, minor: Int, patch: Int) throws {
+    public var rawValue: String {
+        "\(major).\(minor).\(patch)"
+    }
+
+    public var description: String {
+        rawValue
+    }
+
+    public init(major: Int, minor: Int, patch: Int) throws(ParsingError) {
         guard major >= 0, minor >= 0, patch >= 0 else {
-            throw ParsingError("Version components must be non-negative")
+            throw ParsingError.invalidVersion("\(major).\(minor).\(patch)")
         }
+
         self.major = major
         self.minor = minor
         self.patch = patch
     }
 
-    public init(_ rawValue: String) throws {
-        guard !rawValue.contains("-"), !rawValue.contains("+") else {
-            throw ParsingError("ANS versions do not support prerelease or build metadata")
+    public init(_ rawValue: String) throws(ParsingError) {
+        let normalized: Substring
+        if rawValue.first == "v" || rawValue.first == "V" {
+            normalized = rawValue.dropFirst()
+        } else {
+            normalized = Substring(rawValue)
         }
 
-        let parts = rawValue.split(separator: ".", omittingEmptySubsequences: false)
+        let parts = normalized.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 3 else {
-            throw ParsingError("Version must have major, minor, and patch components")
+            throw ParsingError.invalidVersion(rawValue)
         }
 
-        let components = try parts.map { part in
-            guard !part.isEmpty, part.allSatisfy(\.isNumber), let value = Int(part) else {
-                throw ParsingError("Version components must be numeric")
-            }
-            return value
+        self.major = try Self.parse(parts[0], original: rawValue)
+        self.minor = try Self.parse(parts[1], original: rawValue)
+        self.patch = try Self.parse(parts[2], original: rawValue)
+    }
+
+    private static func parse(_ part: Substring, original: String) throws(ParsingError) -> Int {
+        guard !part.isEmpty else {
+            throw ParsingError.invalidVersion(original)
         }
 
-        try self.init(major: components[0], minor: components[1], patch: components[2])
+        guard part.utf8.allSatisfy({ byte in byte >= 48 && byte <= 57 }) else {
+            throw ParsingError.invalidVersion(original)
+        }
+
+        if part.count > 1, part.first == "0" {
+            throw ParsingError.invalidVersion(original)
+        }
+
+        guard let value = Int(part) else {
+            throw ParsingError.invalidVersion(original)
+        }
+
+        return value
     }
+}
 
-    public var rawValue: String { description }
-
-    public var description: String {
-        "\(major).\(minor).\(patch)"
-    }
-
-    public static func < (lhs: Version, rhs: Version) -> Bool {
-        if lhs.major != rhs.major { return lhs.major < rhs.major }
-        if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
-        return lhs.patch < rhs.patch
-    }
-
+#if !hasFeature(Embedded)
+extension Version: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        try self.init(container.decode(String.self))
+        let rawValue = try container.decode(String.self)
+        do {
+            try self.init(rawValue)
+        } catch let error {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "\(error)")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
+    }
+}
+#endif
+
+public extension Version {
+    static func < (lhs: Version, rhs: Version) -> Bool {
+        if lhs.major != rhs.major {
+            return lhs.major < rhs.major
+        }
+        if lhs.minor != rhs.minor {
+            return lhs.minor < rhs.minor
+        }
+        return lhs.patch < rhs.patch
     }
 }
